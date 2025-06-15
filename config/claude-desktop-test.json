@@ -1,15 +1,10 @@
 {
   "mcpServers": {
     "openapi-connector-example": {
-      "command": "node",
-      "args": ["../mcp-openapi-connector.js"],
-      "cwd": "path/to/mcp-openapi-connector",
-      "env": {
-        "CLIENT_ID": "your-client-id",
-        "CLIENT_SECRET": "your-client-secret",
-        "AUTH_URL": "https://api.example.com/auth/token",
-        "API_BASE_URL": "https://api.example.com"
-      }
+      "command": "tsx",
+      "args": ["/path/to/mcp-openapi-connector/src/test-openapi-connector.ts"],
+      "cwd": "/path/to/mcp-openapi-connector",
+      "env": {}
     }
   }
 }

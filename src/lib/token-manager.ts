@@ -1,10 +1,15 @@
+import type { TokenManagerConfig, TokenResponse, CachedToken } from '../types/auth.js';
+
 export class TokenManager {
-  constructor(clientId, clientSecret, authUrl) {
-    this.config = { clientId, clientSecret, authUrl };
+  private config: TokenManagerConfig;
+  private tokenCache: Map<string, CachedToken>;
+
+  constructor(clientId: string, clientSecret: string, authUrl: string, authPath: string = '/auth/token') {
+    this.config = { clientId, clientSecret, authUrl, authPath };
     this.tokenCache = new Map();
   }
 
-  async getValidToken(service = 'default') {
+  async getValidToken(service: string = 'default'): Promise<string> {
     const cached = this.tokenCache.get(service);
     
     if (cached && this.isTokenValid(cached)) {
@@ -16,20 +21,24 @@ export class TokenManager {
     return newToken.access_token;
   }
 
-  isTokenValid(token) {
+  private isTokenValid(token: CachedToken): boolean {
     if (!token || !token.expires_at) return false;
     const buffer = 30 * 1000; // 30 seconds buffer
     return Date.now() < token.expires_at - buffer;
   }
 
-  async requestNewToken() {
+  private async requestNewToken(): Promise<CachedToken> {
     const requestBody = {
       clientId: this.config.clientId,
       clientSecret: this.config.clientSecret
     };
 
+    const fullAuthUrl = this.config.authUrl + (this.config.authPath || '/auth/token');
+    console.error(`[Auth] Requesting token from: ${fullAuthUrl}`);
+    console.error(`[Auth] Request body: ${JSON.stringify(requestBody)}`);
+
     try {
-      const response = await fetch(this.config.authUrl, {
+      const response = await fetch(fullAuthUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -43,10 +52,14 @@ export class TokenManager {
         throw new Error(`Authentication failed: ${response.status} ${response.statusText} - ${responseText}`);
       }
 
-      const data = JSON.parse(responseText);
+      const data: TokenResponse = JSON.parse(responseText);
       
       // Some APIs return {token: "..."} instead of {access_token: "..."}
       const accessToken = data.access_token || data.token;
+      if (!accessToken) {
+        throw new Error('No access token in response');
+      }
+      
       const expiresIn = data.expires_in || 3600; // Default 1 hour if not specified
       
       return {
@@ -57,16 +70,20 @@ export class TokenManager {
       };
     } catch (error) {
       console.error('Token request failed:', error);
-      throw new Error(`Failed to obtain access token: ${error.message}`);
+      throw new Error(`Failed to obtain access token: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  clearCache() {
+  clearCache(): void {
     this.tokenCache.clear();
   }
 
-  async refreshToken(service = 'default') {
+  async refreshToken(service: string = 'default'): Promise<string> {
     this.tokenCache.delete(service);
     return this.getValidToken(service);
+  }
+
+  async requestTokenDirect(): Promise<CachedToken> {
+    return this.requestNewToken();
   }
 }

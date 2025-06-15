@@ -25,6 +25,9 @@ Thumbs.db
 dist/
 build/
 
+# TypeScript
+*.tsbuildinfo
+
 # Test coverage
 coverage/
 .nyc_output/

@@ -1,15 +1,24 @@
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import type { 
+  OpenAPISpec, 
+  Schema, 
+  Parameter, 
+  Operation, 
+  MCPTool, 
+  OpenAPILoaderOptions 
+} from '../types/openapi.js';
 
 export class OpenAPILoader {
+  private specs: Map<string, OpenAPISpec>;
+
   constructor() {
     this.specs = new Map();
   }
 
-  async loadSpec(specPath) {
+  async loadSpec(specPath: string): Promise<OpenAPISpec> {
     try {
       const content = await readFile(specPath, 'utf-8');
-      const spec = JSON.parse(content);
+      const spec: OpenAPISpec = JSON.parse(content);
       
       if (!spec.openapi || !spec.paths) {
         throw new Error('Invalid OpenAPI specification');
@@ -23,13 +32,13 @@ export class OpenAPILoader {
     }
   }
 
-  generateToolsFromSpec(spec, options = {}) {
-    const tools = [];
+  generateToolsFromSpec(spec: OpenAPISpec, options: OpenAPILoaderOptions = {}): MCPTool[] {
+    const tools: MCPTool[] = [];
     const { prefix = '', includeOnly, exclude = [] } = options;
     
     for (const [path, pathItem] of Object.entries(spec.paths)) {
       for (const [method, operation] of Object.entries(pathItem)) {
-        if (['get', 'post', 'put', 'patch', 'delete'].includes(method.toLowerCase())) {
+        if (['get', 'post', 'put', 'patch', 'delete'].includes(method.toLowerCase()) && operation) {
           const toolName = this.generateToolName(path, method, operation, prefix);
           
           if (exclude.includes(toolName)) continue;
@@ -51,7 +60,7 @@ export class OpenAPILoader {
     return tools;
   }
 
-  generateToolName(path, method, operation, prefix) {
+  private generateToolName(path: string, method: string, operation: Operation, prefix: string): string {
     if (operation.operationId) {
       return prefix + operation.operationId;
     }
@@ -62,16 +71,27 @@ export class OpenAPILoader {
     return prefix + method.toLowerCase() + '_' + resourceName;
   }
 
-  createToolFromOperation(name, path, method, operation, spec) {
-    const tool = {
+  private createToolFromOperation(
+    name: string, 
+    path: string, 
+    method: string, 
+    operation: Operation, 
+    spec: OpenAPISpec
+  ): MCPTool {
+    const tool: MCPTool = {
       name,
       description: operation.summary || operation.description || `${method} ${path}`,
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      },
       _apiEndpoint: path,
       _method: method
     };
 
     // Check for special content types
-    if (operation.requestBody && operation.requestBody.content) {
+    if (operation.requestBody?.content) {
       const contentTypes = Object.keys(operation.requestBody.content);
       if (contentTypes.includes('multipart/form-data')) {
         tool._contentType = 'multipart/form-data';
@@ -81,9 +101,9 @@ export class OpenAPILoader {
     }
 
     const inputSchema = {
-      type: 'object',
-      properties: {},
-      required: []
+      type: 'object' as const,
+      properties: {} as Record<string, Schema>,
+      required: [] as string[]
     };
 
     // Path parameters
@@ -102,9 +122,9 @@ export class OpenAPILoader {
     }
 
     // Request body
-    if (operation.requestBody && operation.requestBody.content) {
+    if (operation.requestBody?.content) {
       const jsonContent = operation.requestBody.content['application/json'];
-      if (jsonContent && jsonContent.schema) {
+      if (jsonContent?.schema) {
         const bodySchema = this.resolveSchema(jsonContent.schema, spec);
         
         if (bodySchema.properties) {
@@ -122,7 +142,7 @@ export class OpenAPILoader {
     return tool;
   }
 
-  parameterToSchema(param) {
+  private parameterToSchema(param: Parameter): Schema {
     const schema = param.schema || {};
     
     return {
@@ -136,10 +156,10 @@ export class OpenAPILoader {
     };
   }
 
-  resolveSchema(schema, spec) {
+  private resolveSchema(schema: Schema, spec: OpenAPISpec): Schema {
     if (schema.$ref) {
       const refPath = schema.$ref.split('/');
-      let resolved = spec;
+      let resolved: any = spec;
       
       for (let i = 1; i < refPath.length; i++) {
         resolved = resolved[refPath[i]];
@@ -149,15 +169,19 @@ export class OpenAPILoader {
     }
     
     if (schema.allOf) {
-      const merged = { type: 'object', properties: {}, required: [] };
+      const merged: Schema = { 
+        type: 'object', 
+        properties: {}, 
+        required: [] 
+      };
       
       for (const subSchema of schema.allOf) {
         const resolved = this.resolveSchema(subSchema, spec);
         if (resolved.properties) {
-          Object.assign(merged.properties, resolved.properties);
+          Object.assign(merged.properties!, resolved.properties);
         }
         if (resolved.required) {
-          merged.required.push(...resolved.required);
+          merged.required!.push(...resolved.required);
         }
       }
       
@@ -167,7 +191,7 @@ export class OpenAPILoader {
     return schema;
   }
 
-  async loadAndGenerateTools(specPath, options = {}) {
+  async loadAndGenerateTools(specPath: string, options: OpenAPILoaderOptions = {}): Promise<MCPTool[]> {
     const spec = await this.loadSpec(specPath);
     return this.generateToolsFromSpec(spec, options);
   }

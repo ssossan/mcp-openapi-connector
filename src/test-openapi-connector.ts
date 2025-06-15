@@ -51,7 +51,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: 'text',
-          text: `Hello! You said: ${args.message || 'nothing'}`
+          text: `Hello! You said: ${(args as any)?.message || 'nothing'}`
         }
       ]
     };
@@ -68,7 +68,7 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
   return { prompts: [] };
 });
 
-async function main() {
+async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('Test MCP server started');

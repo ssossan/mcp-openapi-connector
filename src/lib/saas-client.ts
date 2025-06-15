@@ -1,10 +1,16 @@
+import type { APIRequestOptions } from '../types/auth.js';
+import type { TokenManager } from './token-manager.js';
+
 export class SaaSAPIClient {
-  constructor(apiBaseUrl, tokenManager) {
+  private apiBaseUrl: string;
+  public readonly tokenManager: TokenManager;
+
+  constructor(apiBaseUrl: string, tokenManager: TokenManager) {
     this.apiBaseUrl = apiBaseUrl;
     this.tokenManager = tokenManager;
   }
 
-  async call(endpoint, options = {}, authRetryCount = 0) {
+  async call(endpoint: string, options: APIRequestOptions = {}, authRetryCount: number = 0): Promise<any> {
     const { method = 'GET', params, body, headers = {} } = options;
     
     let url = `${this.apiBaseUrl}${endpoint}`;
@@ -16,19 +22,18 @@ export class SaaSAPIClient {
       for (const [key, value] of Object.entries(params)) {
         if (Array.isArray(value)) {
           // Add each array item as a separate parameter
-          value.forEach(item => queryParams.append(key, item));
-        } else {
-          queryParams.append(key, value);
+          value.forEach(item => queryParams.append(key, String(item)));
+        } else if (value !== undefined && value !== null) {
+          queryParams.append(key, String(value));
         }
       }
       
       url += `?${queryParams.toString()}`;
     }
 
-
     const token = await this.tokenManager.getValidToken();
     
-    const requestOptions = {
+    const requestOptions: RequestInit = {
       method,
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -36,7 +41,6 @@ export class SaaSAPIClient {
         ...headers
       }
     };
-
 
     if (body && method !== 'GET') {
       requestOptions.body = JSON.stringify(body);
@@ -68,15 +72,15 @@ export class SaaSAPIClient {
     }
   }
 
-  async makeRequestWithRetry(url, options, retries = 3) {
-    let lastError;
+  private async makeRequestWithRetry(url: string, options: RequestInit, retries: number = 3): Promise<Response> {
+    let lastError: Error;
     
     for (let i = 0; i < retries; i++) {
       try {
         const response = await fetch(url, options);
         return response;
       } catch (error) {
-        lastError = error;
+        lastError = error as Error;
         if (i < retries - 1) {
           const delay = Math.min(1000 * Math.pow(2, i), 5000);
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -84,10 +88,10 @@ export class SaaSAPIClient {
       }
     }
     
-    throw lastError;
+    throw lastError!;
   }
 
-  async handleAuthError() {
+  private async handleAuthError(): Promise<void> {
     try {
       await this.tokenManager.refreshToken();
     } catch (error) {
@@ -96,23 +100,23 @@ export class SaaSAPIClient {
     }
   }
 
-  async get(endpoint, params) {
+  async get(endpoint: string, params?: Record<string, any>): Promise<any> {
     return this.call(endpoint, { method: 'GET', params });
   }
 
-  async post(endpoint, body) {
+  async post(endpoint: string, body?: any): Promise<any> {
     return this.call(endpoint, { method: 'POST', body });
   }
 
-  async put(endpoint, body) {
+  async put(endpoint: string, body?: any): Promise<any> {
     return this.call(endpoint, { method: 'PUT', body });
   }
 
-  async delete(endpoint) {
+  async delete(endpoint: string): Promise<any> {
     return this.call(endpoint, { method: 'DELETE' });
   }
 
-  async patch(endpoint, body) {
+  async patch(endpoint: string, body?: any): Promise<any> {
     return this.call(endpoint, { method: 'PATCH', body });
   }
 }

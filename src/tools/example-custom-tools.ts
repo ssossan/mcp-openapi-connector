@@ -1,5 +1,7 @@
+import type { MCPOpenAPIConnector } from '../mcp-openapi-connector.js';
+
 export default {
-  register(server) {
+  register(server: MCPOpenAPIConnector): void {
     server.registerCustomTool('search_items', {
       name: 'search_items',
       description: 'Search for items by query',
@@ -8,8 +10,7 @@ export default {
         properties: {
           query: { 
             type: 'string', 
-            description: 'Search query',
-            required: true 
+            description: 'Search query'
           },
           filters: { 
             type: 'object', 
@@ -23,19 +24,17 @@ export default {
           },
           sort: {
             type: 'string',
-            enum: ['created_at', 'updated_at', 'name'],
-            default: 'created_at'
+            enum: ['created_at', 'updated_at', 'name']
           },
           order: {
             type: 'string',
-            enum: ['asc', 'desc'],
-            default: 'desc'
+            enum: ['asc', 'desc']
           }
         },
         required: ['query']
       },
-      apiEndpoint: '/items/search',
-      method: 'POST'
+      _apiEndpoint: '/items/search',
+      _method: 'POST'
     });
 
     server.registerCustomTool('bulk_operations', {
@@ -46,14 +45,12 @@ export default {
         properties: {
           operation: {
             type: 'string',
-            enum: ['update', 'delete', 'archive'],
-            required: true
+            enum: ['update', 'delete', 'archive']
           },
           item_ids: {
             type: 'array',
             items: { type: 'string' },
-            description: 'List of item IDs to operate on',
-            required: true
+            description: 'List of item IDs to operate on'
           },
           updates: {
             type: 'object',
@@ -93,7 +90,7 @@ export default {
       name: 'Recent Items',
       description: 'List of recently created or updated items',
       mimeType: 'application/json',
-      handler: async (uri, apiClient) => {
+      handler: async (_uri, apiClient) => {
         const items = await apiClient.get('/items', {
           sort: 'updated_at',
           order: 'desc',
@@ -113,7 +110,7 @@ export default {
       name: 'Item Statistics',
       description: 'Statistics about items in the system',
       mimeType: 'application/json',
-      handler: async (uri, apiClient) => {
+      handler: async (_uri, apiClient) => {
         const stats = await apiClient.get('/items/stats');
         
         return {

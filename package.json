@@ -2,12 +2,17 @@
   "name": "mcp-openapi-connector",
   "version": "1.0.0",
   "description": "MCP Server for OpenAPI-based APIs with built-in authentication management",
-  "main": "mcp-openapi-connector.js",
+  "main": "dist/mcp-openapi-connector.js",
   "type": "module",
   "scripts": {
-    "start": "node mcp-openapi-connector.js",
-    "dev": "node --watch mcp-openapi-connector.js",
-    "test": "node --test"
+    "build": "tsc",
+    "start": "npm run build && node dist/mcp-openapi-connector.js",
+    "dev": "tsx src/mcp-openapi-connector.ts",
+    "test": "npm run build && node dist/test-openapi-connector.js",
+    "test:dev": "tsx src/test-openapi-connector.ts",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
     "mcp",
@@ -23,7 +28,11 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "dotenv": "^16.4.5"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@types/node": "^24.0.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
   "engines": {
     "node": ">=20.0.0"
   }

@@ -31,11 +31,26 @@ cp .env.example .env
 ```env
 CLIENT_ID=your-client-id
 CLIENT_SECRET=your-client-secret
-AUTH_URL=https://api.saas.com/oauth/token
-API_BASE_URL=https://api.saas.com/v1
+API_BASE_URL=https://api.example.com
+AUTH_PATH=/oauth/token
 ```
 
 ## Usage
+
+### Development Mode
+
+For development with automatic recompilation:
+```bash
+npm run dev
+```
+
+### Production Mode
+
+Build and run the compiled version:
+```bash
+npm run build
+npm start
+```
 
 ### Claude Desktop Configuration
 
@@ -45,32 +60,42 @@ Add to your Claude Desktop config file:
 {
   "mcpServers": {
     "openapi-connector": {
-      "command": "node",
-      "args": ["/path/to/mcp-openapi-connector.js"],
+      "command": "npx",
+      "args": ["tsx", "/path/to/mcp-openapi-connector/src/mcp-openapi-connector.ts"],
+      "cwd": "/path/to/mcp-openapi-connector",
       "env": {
         "CLIENT_ID": "your-client-id",
         "CLIENT_SECRET": "your-client-secret",
-        "AUTH_URL": "https://api.saas.com/oauth/token",
-        "API_BASE_URL": "https://api.saas.com/v1"
+        "API_BASE_URL": "https://api.example.com",
+        "AUTH_PATH": "/oauth/token"
       }
     }
   }
 }
 ```
 
-### Available Tools
-
-The server includes these default tools:
-
-- `list_items` - List all items with pagination
-- `get_item` - Get a specific item by ID
-- `create_item` - Create a new item
-- `update_item` - Update an existing item
-- `delete_item` - Delete an item
+**Alternative: Using compiled version**
+```json
+{
+  "mcpServers": {
+    "openapi-connector": {
+      "command": "node",
+      "args": ["/path/to/mcp-openapi-connector/dist/mcp-openapi-connector.js"],
+      "cwd": "/path/to/mcp-openapi-connector",
+      "env": {
+        "CLIENT_ID": "your-client-id",
+        "CLIENT_SECRET": "your-client-secret",
+        "API_BASE_URL": "https://api.example.com",
+        "AUTH_PATH": "/oauth/token"
+      }
+    }
+  }
+}
+```
 
 ### OpenAPI Integration
 
-The server can automatically generate tools from an OpenAPI specification:
+The server automatically generates tools from an OpenAPI specification. **An OpenAPI specification is required for the server to function.**
 
 1. Place your OpenAPI spec file (JSON format) in the project
 2. Set the path in your environment:
@@ -82,7 +107,7 @@ OPENAPI_INCLUDE_ONLY=listItems,createItem  # Optional: only include specific ope
 OPENAPI_EXCLUDE=deleteItem  # Optional: exclude specific operations
 ```
 
-The server will automatically generate MCP tools from all operations in your OpenAPI spec.
+The server will automatically generate MCP tools from all operations in your OpenAPI spec. Without an OpenAPI specification, the server will only provide test/debug tools.
 
 ### Custom Tools
 
@@ -110,24 +135,30 @@ export default {
 Then set `CUSTOM_TOOLS_PATH` in your environment:
 
 ```env
-CUSTOM_TOOLS_PATH=./tools/my-custom-tools.js
+CUSTOM_TOOLS_PATH=./src/tools/my-custom-tools.ts
 ```
 
 ## Development
 
-### Running in Development Mode
+### Available Scripts
 
 ```bash
-npm run dev
+npm run dev          # Development mode with tsx
+npm run build        # Compile TypeScript to JavaScript
+npm start            # Build and run production version
+npm run test         # Build and run test server
+npm run test:dev     # Run test server in development mode
+npm run typecheck    # Type check without compilation
+npm run clean        # Remove build output
 ```
 
-This uses Node.js --watch flag for automatic reloading.
+### TypeScript Development
 
-### Testing
+This project is built with TypeScript for better type safety and development experience:
 
-```bash
-npm test
-```
+- **Source code**: `src/` directory
+- **Build output**: `dist/` directory  
+- **Type definitions**: Automatically generated `.d.ts` files
 
 ## Architecture
 
@@ -140,10 +171,12 @@ Claude Desktop ↔ MCP Server (stdio) → OpenAPI-based API
 
 ### Key Components
 
-- **mcp-openapi-connector.js** - Main server entry point
-- **lib/token-manager.js** - OAuth2 token management with caching
-- **lib/saas-client.js** - HTTP client with automatic authentication
-- **lib/mcp-handler.js** - MCP protocol handling and tool registration
+- **src/mcp-openapi-connector.ts** - Main server entry point
+- **src/lib/token-manager.ts** - OAuth2 token management with caching
+- **src/lib/saas-client.ts** - HTTP client with automatic authentication
+- **src/lib/mcp-handler.ts** - MCP protocol handling and tool registration
+- **src/lib/openapi-loader.ts** - OpenAPI specification parser and tool generator
+- **src/types/** - TypeScript type definitions
 
 ## Migration from v1.x
 
@@ -176,7 +209,7 @@ See the `config/openapi-example.json` file for a sample OpenAPI specification th
 Set `NODE_ENV=development` for verbose logging:
 
 ```bash
-NODE_ENV=development node mcp-openapi-connector.js
+NODE_ENV=development npm run dev
 ```
 
 ## Contributing

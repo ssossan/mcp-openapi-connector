@@ -12,26 +12,39 @@ import {
 import { TokenManager } from './lib/token-manager.js';
 import { SaaSAPIClient } from './lib/saas-client.js';
 import { MCPHandler } from './lib/mcp-handler.js';
+import type { MCPToolDefinition, MCPResourceDefinition } from './types/mcp.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-class MCPOpenAPIConnector {
+interface CustomToolsModule {
+  default: {
+    register: (server: MCPOpenAPIConnector) => void;
+  };
+}
+
+export class MCPOpenAPIConnector {
+  private tokenManager: TokenManager;
+  private apiClient: SaaSAPIClient;
+  private mcpHandler: MCPHandler;
+  private server: Server;
+
   constructor() {
     this.validateEnvironment();
     
     this.tokenManager = new TokenManager(
-      process.env.CLIENT_ID,
-      process.env.CLIENT_SECRET,
-      process.env.AUTH_URL
+      process.env.CLIENT_ID!,
+      process.env.CLIENT_SECRET!,
+      process.env.API_BASE_URL!,
+      process.env.AUTH_PATH || '/auth/token'
     );
     
     this.apiClient = new SaaSAPIClient(
-      process.env.API_BASE_URL,
+      process.env.API_BASE_URL!,
       this.tokenManager
     );
     
-    this.mcpHandler = new MCPHandler(this.apiClient);
+    this.mcpHandler = new MCPHandler(this.apiClient, process.env.AUTH_PATH || '/auth/token');
     this.server = new Server(
       {
         name: 'mcp-openapi-connector',
@@ -47,8 +60,8 @@ class MCPOpenAPIConnector {
     );
   }
 
-  validateEnvironment() {
-    const required = ['CLIENT_ID', 'CLIENT_SECRET', 'AUTH_URL', 'API_BASE_URL'];
+  private validateEnvironment(): void {
+    const required = ['CLIENT_ID', 'CLIENT_SECRET', 'API_BASE_URL', 'OPENAPI_SPEC_PATH'];
     const missing = required.filter(key => !process.env[key]);
     
     if (missing.length > 0) {
@@ -58,7 +71,7 @@ class MCPOpenAPIConnector {
     }
   }
 
-  setupBasicHandlers() {
+  private setupBasicHandlers(): void {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: await this.mcpHandler.listTools()
@@ -80,11 +93,12 @@ class MCPOpenAPIConnector {
         };
       } catch (error) {
         console.error(`Tool execution error for ${name}:`, error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
         return {
           content: [
             {
               type: 'text',
-              text: `Error: ${error.message}`
+              text: `Error: ${errorMessage}`
             }
           ],
           isError: true
@@ -114,12 +128,13 @@ class MCPOpenAPIConnector {
         };
       } catch (error) {
         console.error(`Resource read error for ${uri}:`, error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
         return {
           contents: [
             {
               uri,
               mimeType: 'text/plain',
-              text: `Error: ${error.message}`
+              text: `Error: ${errorMessage}`
             }
           ]
         };
@@ -133,7 +148,7 @@ class MCPOpenAPIConnector {
     });
   }
 
-  async loadTools() {
+  private async loadTools(): Promise<void> {
     // Always register test/debug tools first
     this.mcpHandler.registerTool('test_saas_connection', {
       name: 'test_saas_connection',
@@ -143,7 +158,7 @@ class MCPOpenAPIConnector {
         properties: {},
         required: []
       },
-      handler: async (args, apiClient) => {
+      handler: async (_args, _apiClient) => {
         return { status: 'success', message: 'SaaS MCP server is working!' };
       }
     });
@@ -156,7 +171,7 @@ class MCPOpenAPIConnector {
         properties: {},
         required: []
       },
-      handler: async (args, apiClient) => {
+      handler: async (_args, apiClient) => {
         try {
           // Try to get a token to test authentication
           const token = await apiClient.tokenManager.getValidToken();
@@ -166,10 +181,11 @@ class MCPOpenAPIConnector {
             token_preview: token.substring(0, 20) + '...'
           };
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           return { 
             status: 'error', 
-            message: `Authentication failed: ${error.message}`,
-            error: error.toString()
+            message: `Authentication failed: ${errorMessage}`,
+            error: String(error)
           };
         }
       }
@@ -186,16 +202,14 @@ class MCPOpenAPIConnector {
         });
       } catch (error) {
         console.error('Failed to load OpenAPI spec:', error);
-        // Fallback to default tools if OpenAPI fails
-        this.mcpHandler.registerDefaultTools();
+        throw error; // Fail if OpenAPI loading fails
       }
     } else {
-      // Register default tools if no OpenAPI spec
-      this.mcpHandler.registerDefaultTools();
+      console.error('Warning: No OPENAPI_SPEC_PATH provided. This server requires an OpenAPI specification to generate tools.');
     }
   }
 
-  async start() {
+  async start(): Promise<void> {
     // Load tools first
     await this.loadTools();
     
@@ -209,22 +223,22 @@ class MCPOpenAPIConnector {
     console.error(`Connected to API: ${process.env.API_BASE_URL}`);
   }
 
-  registerCustomTool(name, definition) {
+  registerCustomTool(name: string, definition: MCPToolDefinition): void {
     this.mcpHandler.registerTool(name, definition);
   }
 
-  registerCustomResource(uri, definition) {
+  registerCustomResource(uri: string, definition: MCPResourceDefinition): void {
     this.mcpHandler.registerResource(uri, definition);
   }
 }
 
-async function loadCustomTools(server) {
+async function loadCustomTools(server: MCPOpenAPIConnector): Promise<void> {
   const customToolsPath = process.env.CUSTOM_TOOLS_PATH;
   if (customToolsPath) {
     try {
-      const { default: customTools } = await import(customToolsPath);
-      if (customTools && typeof customTools.register === 'function') {
-        customTools.register(server);
+      const customTools: CustomToolsModule = await import(customToolsPath);
+      if (customTools.default && typeof customTools.default.register === 'function') {
+        customTools.default.register(server);
         console.error(`Loaded custom tools from ${customToolsPath}`);
       }
     } catch (error) {
@@ -233,14 +247,16 @@ async function loadCustomTools(server) {
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   try {
     const server = new MCPOpenAPIConnector();
     await loadCustomTools(server);
     await server.start();
   } catch (error) {
     console.error('Failed to start server:', error);
-    console.error(error.stack);
+    if (error instanceof Error) {
+      console.error(error.stack);
+    }
     // For MCP servers, it's better to exit gracefully
     // rather than calling process.exit which can cause JSON parsing errors
     return;
