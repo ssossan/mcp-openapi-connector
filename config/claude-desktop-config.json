@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "openapi-connector": {
+      "command": "node",
+      "args": ["./mcp-openapi-connector.js"],
+      "env": {
+        "CLIENT_ID": "your-client-id",
+        "CLIENT_SECRET": "your-client-secret",
+        "AUTH_URL": "https://api.saas.com/oauth/token",
+        "API_BASE_URL": "https://api.saas.com/v1"
+      }
+    }
+  }
+}
