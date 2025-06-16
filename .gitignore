@@ -6,6 +6,10 @@ node_modules/
 .env.local
 .env.*.local
 
+# Generated configuration files
+generated/
+claude-desktop-config.json
+
 # Logs
 logs/
 *.log

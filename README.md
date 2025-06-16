@@ -20,7 +20,23 @@ cd mcp-openapi-connector
 npm install
 ```
 
-## Configuration
+## Quick Setup (Recommended)
+
+Run the interactive setup wizard:
+
+```bash
+npm run setup
+```
+
+This will:
+- Collect your API configuration through interactive prompts
+- Generate `generated/.env` file with your settings
+- Create `generated/claude-desktop-config.json` for easy Claude Desktop integration
+- Provide step-by-step instructions for Claude Desktop configuration
+
+## Manual Configuration
+
+Alternatively, you can set up manually:
 
 1. Copy `.env.example` to `.env`:
 ```bash
@@ -33,6 +49,7 @@ CLIENT_ID=your-client-id
 CLIENT_SECRET=your-client-secret
 API_BASE_URL=https://api.example.com
 AUTH_PATH=/oauth/token
+OPENAPI_SPEC_PATH=./config/openapi.json
 ```
 
 ## Usage
@@ -54,7 +71,7 @@ npm start
 
 ### Claude Desktop Configuration
 
-Add to your Claude Desktop config file:
+Add to your Claude Desktop config file (see `config/claude-desktop-config.template.json` for reference):
 
 ```json
 {

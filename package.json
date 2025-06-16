@@ -12,6 +12,7 @@
     "test:dev": "tsx src/test-openapi-connector.ts",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
+    "setup": "tsx scripts/setup.ts",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
@@ -30,6 +31,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.1",
+    "@types/prompts": "^2.4.9",
+    "prompts": "^2.4.2",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   },
