@@ -69,6 +69,9 @@ export interface Schema {
   properties?: Record<string, Schema>;
   required?: string[];
   items?: Schema;
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
   allOf?: Schema[];
   oneOf?: Schema[];
   anyOf?: Schema[];

@@ -152,7 +152,11 @@ export class OpenAPILoader {
       ...(schema.minimum !== undefined && { minimum: schema.minimum }),
       ...(schema.maximum !== undefined && { maximum: schema.maximum }),
       ...(schema.pattern && { pattern: schema.pattern }),
-      ...(schema.format && { format: schema.format })
+      ...(schema.format && { format: schema.format }),
+      ...(schema.items && { items: schema.items }),
+      ...(schema.minItems !== undefined && { minItems: schema.minItems }),
+      ...(schema.maxItems !== undefined && { maxItems: schema.maxItems }),
+      ...(schema.uniqueItems !== undefined && { uniqueItems: schema.uniqueItems })
     };
   }
 
