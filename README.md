@@ -14,8 +14,22 @@ A unified Model Context Protocol (MCP) server for connecting OpenAPI-based APIs 
 
 ## Installation
 
+### Via npm (Recommended)
+
 ```bash
-git clone https://github.com/yourusername/mcp-openapi-connector.git
+npm install -g @ssossan/mcp-openapi-connector
+```
+
+Or use directly with npx:
+
+```bash
+npx @ssossan/mcp-openapi-connector
+```
+
+### From Source
+
+```bash
+git clone https://github.com/ssossan/mcp-openapi-connector.git
 cd mcp-openapi-connector
 npm install
 ```
@@ -71,27 +85,46 @@ npm start
 
 ### Claude Desktop Configuration
 
-Add to your Claude Desktop config file (see `config/claude-desktop-config.template.json` for reference):
+Add to your Claude Desktop config file:
 
+**Using npm package (Recommended):**
 ```json
 {
   "mcpServers": {
     "openapi-connector": {
       "command": "npx",
-      "args": ["tsx", "/path/to/mcp-openapi-connector/src/mcp-openapi-connector.ts"],
-      "cwd": "/path/to/mcp-openapi-connector",
+      "args": ["@ssossan/mcp-openapi-connector"],
       "env": {
         "CLIENT_ID": "your-client-id",
         "CLIENT_SECRET": "your-client-secret",
         "API_BASE_URL": "https://api.example.com",
-        "AUTH_PATH": "/oauth/token"
+        "AUTH_PATH": "/oauth/token",
+        "OPENAPI_SPEC_PATH": "/path/to/openapi.json"
       }
     }
   }
 }
 ```
 
-**Alternative: Using compiled version**
+**Using global installation:**
+```json
+{
+  "mcpServers": {
+    "openapi-connector": {
+      "command": "mcp-openapi-connector",
+      "env": {
+        "CLIENT_ID": "your-client-id",
+        "CLIENT_SECRET": "your-client-secret",
+        "API_BASE_URL": "https://api.example.com",
+        "AUTH_PATH": "/oauth/token",
+        "OPENAPI_SPEC_PATH": "/path/to/openapi.json"
+      }
+    }
+  }
+}
+```
+
+**Using from source:**
 ```json
 {
   "mcpServers": {
@@ -103,7 +136,8 @@ Add to your Claude Desktop config file (see `config/claude-desktop-config.templa
         "CLIENT_ID": "your-client-id",
         "CLIENT_SECRET": "your-client-secret",
         "API_BASE_URL": "https://api.example.com",
-        "AUTH_PATH": "/oauth/token"
+        "AUTH_PATH": "/oauth/token",
+        "OPENAPI_SPEC_PATH": "/path/to/openapi.json"
       }
     }
   }
@@ -153,6 +187,16 @@ Then set `CUSTOM_TOOLS_PATH` in your environment:
 
 ```env
 CUSTOM_TOOLS_PATH=./src/tools/my-custom-tools.ts
+```
+
+## Publishing to npm
+
+For maintainers:
+
+```bash
+npm run build
+npm test
+npm publish --access public
 ```
 
 ## Development

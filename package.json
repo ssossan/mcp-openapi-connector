@@ -1,9 +1,12 @@
 {
-  "name": "mcp-openapi-connector",
+  "name": "@ssossan/mcp-openapi-connector",
   "version": "1.0.0",
   "description": "MCP Server for OpenAPI-based APIs with built-in authentication management",
   "main": "dist/mcp-openapi-connector.js",
   "type": "module",
+  "bin": {
+    "mcp-openapi-connector": "dist/mcp-openapi-connector.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "npm run build && node dist/mcp-openapi-connector.js",
@@ -23,8 +26,16 @@
     "connector",
     "authentication"
   ],
-  "author": "",
+  "author": "Hiroshi Kawata <ssossanssossan@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ssossan/mcp-openapi-connector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ssossan/mcp-openapi-connector/issues"
+  },
+  "homepage": "https://github.com/ssossan/mcp-openapi-connector#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "dotenv": "^16.4.5"

@@ -1,0 +1,46 @@
+# Source files (only distribute compiled JS)
+src/
+*.ts
+!dist/**/*.d.ts
+
+# Claude settings
+.claude/
+
+# Configuration and examples
+.env
+.env.*
+config/
+generated/
+scripts/
+
+# Development files
+*.log
+*.tsbuildinfo
+.DS_Store
+node_modules/
+.vscode/
+.idea/
+
+# Test files
+test/
+*.test.js
+*.test.ts
+tsconfig.json
+dist/test-openapi-connector.*
+dist/tools/example-custom-tools.*
+dist/src/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# Other
+.npmrc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
