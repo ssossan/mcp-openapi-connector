@@ -11,8 +11,12 @@
     "build": "tsc",
     "start": "npm run build && node dist/mcp-openapi-connector.js",
     "dev": "tsx src/mcp-openapi-connector.ts",
-    "test": "npm run build && node dist/test-openapi-connector.js",
-    "test:dev": "tsx src/test-openapi-connector.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --coverage --watchAll=false --passWithNoTests",
+    "test:manual": "npm run build && node dist/test-openapi-connector.js",
+    "test:manual:dev": "tsx src/test-openapi-connector.ts",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "setup": "tsx scripts/setup.ts",
@@ -41,9 +45,12 @@
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.0.1",
     "@types/prompts": "^2.4.9",
+    "jest": "^30.0.0",
     "prompts": "^2.4.2",
+    "ts-jest": "^29.4.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   },

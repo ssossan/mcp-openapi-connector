@@ -7,7 +7,7 @@ export interface MCPToolDefinition {
   inputSchema: {
     type: 'object';
     properties: Record<string, Schema>;
-    required?: string[];
+    required: string[];
   };
   handler?: (args: any, apiClient: SaaSAPIClient) => Promise<any>;
   _apiEndpoint?: string;
