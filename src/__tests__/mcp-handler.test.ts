@@ -105,7 +105,8 @@ describe('MCPHandler', () => {
         description: 'Get users',
         inputSchema: { type: 'object', properties: {}, required: [] },
         _apiEndpoint: '/users',
-        _method: 'GET'
+        _method: 'GET',
+        _queryParams: ['limit']
       };
 
       mockSaasClient.call.mockResolvedValue({ users: [] });
@@ -149,7 +150,9 @@ describe('MCPHandler', () => {
         description: 'Get user by ID',
         inputSchema: { type: 'object', properties: {}, required: [] },
         _apiEndpoint: '/users/{id}',
-        _method: 'GET'
+        _method: 'GET',
+        _pathParams: ['id'],
+        _queryParams: ['include']
       };
 
       mockSaasClient.call.mockResolvedValue({ id: '123', name: 'John' });
@@ -269,7 +272,7 @@ describe('MCPHandler', () => {
       );
 
       const tools = await mcpHandler.listTools();
-      expect(tools).toHaveLength(2);
+      expect(tools).toHaveLength(6); // 2 from mock + 4 OpenAPI inspection tools
     });
 
     it('should pass options to OpenAPI loader', async () => {

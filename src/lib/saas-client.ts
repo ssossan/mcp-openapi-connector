@@ -13,9 +13,10 @@ export class SaaSAPIClient {
   async call(endpoint: string, options: APIRequestOptions = {}, authRetryCount: number = 0): Promise<any> {
     const { method = 'GET', params, body, headers = {} } = options;
     
+    
     let url = `${this.apiBaseUrl}${endpoint}`;
     
-    if (params && method === 'GET') {
+    if (params && Object.keys(params).length > 0) {
       const queryParams = new URLSearchParams();
       
       // Handle array parameters correctly
@@ -57,7 +58,18 @@ export class SaaSAPIClient {
         }
         
         const errorText = await response.text();
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+        
+        let errorDetails = errorText;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.errors || errorJson.details || errorJson.violations) {
+            errorDetails = JSON.stringify(errorJson, null, 2);
+          }
+        } catch (e) {
+          // Not JSON, use as is
+        }
+        
+        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorDetails}`);
       }
 
       const contentType = response.headers.get('content-type');

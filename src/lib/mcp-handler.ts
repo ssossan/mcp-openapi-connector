@@ -1,6 +1,6 @@
+import type { MCPResourceDefinition, MCPToolDefinition, OpenAPIToolsOptions } from '../types/mcp.js';
 import { OpenAPILoader } from './openapi-loader.js';
 import type { SaaSAPIClient } from './saas-client.js';
-import type { MCPToolDefinition, MCPResourceDefinition, OpenAPIToolsOptions } from '../types/mcp.js';
 
 export class MCPHandler {
   private saasClient: SaaSAPIClient;
@@ -37,8 +37,6 @@ export class MCPHandler {
       return cleanTool;
     });
     
-    console.error(`[MCP] listTools() returning ${tools.length} tools:`);
-    tools.forEach(tool => console.error(`[MCP] - ${tool.name}`));
     
     return tools;
   }
@@ -59,26 +57,98 @@ export class MCPHandler {
 
     if (tool._apiEndpoint) {
       const method = tool._method || 'GET';
-      const endpoint = this.buildEndpoint(tool._apiEndpoint, args);
+      
+      // Create a copy of args to avoid modifying the original
+      const argsForEndpoint = { ...args };
+      const endpoint = this.buildEndpoint(tool._apiEndpoint, argsForEndpoint);
       
       // Special handling for authentication endpoints - call directly without bearer token
       if (endpoint === this.authPath || name.includes('auth') && name.includes('token')) {
-        console.error(`[MCP] Calling authentication endpoint directly: ${endpoint}`);
         return await this.saasClient.tokenManager.requestTokenDirect();
       }
       
       // Handle file uploads and special content types
       let options: any = { method };
       
+      // Separate parameters by type (excluding path parameters that were already consumed)
+      const queryParams: Record<string, any> = {};
+      let bodyParams: any = {};
+      const pathParamNames = tool._pathParams || [];
+      
+      
+      
+      if (tool._queryParams) {
+        for (const param of tool._queryParams) {
+          if (args[param] !== undefined && !pathParamNames.includes(param)) {
+            queryParams[param] = args[param];
+          }
+        }
+      }
+      
+      if (tool._bodyParams) {
+        for (const param of tool._bodyParams) {
+          if (args[param] !== undefined && !pathParamNames.includes(param)) {
+            let value = args[param];
+            // Handle JSON strings (common issue with MCP parameter passing)
+            if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+              try {
+                value = JSON.parse(value);
+              } catch (e) {
+                // Silently ignore JSON parse errors
+              }
+            }
+            bodyParams[param] = value;
+          }
+        }
+      }
+      
+      // Fallback: If no body params detected but we have non-path args, treat as body params
+      if (Object.keys(bodyParams).length === 0 && method !== 'GET') {
+        // Extract path parameters from endpoint template as fallback
+        const pathParamsFromTemplate = (tool._apiEndpoint.match(/\{([^}]+)\}/g) || [])
+          .map(param => param.slice(1, -1)); // Remove { and }
+        
+        for (const [key, value] of Object.entries(args)) {
+          // Skip path parameters (both explicitly defined and extracted from template)
+          if (!pathParamNames.includes(key) && !pathParamsFromTemplate.includes(key)) {
+            let processedValue = value;
+            // Handle JSON strings
+            if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+              try {
+                processedValue = JSON.parse(value);
+              } catch (e) {
+                // Silently ignore JSON parse errors
+              }
+            }
+            bodyParams[key] = processedValue;
+          }
+        }
+      }
+      
+      // Special handling for APIs that expect direct array body (moved outside fallback)
+      if (bodyParams.body && Array.isArray(bodyParams.body)) {
+        bodyParams = bodyParams.body; // Replace the object with the array directly
+      } else if (bodyParams.fields && Array.isArray(bodyParams.fields)) {
+        // Legacy handling for 'fields' parameter as direct body array
+        bodyParams = bodyParams.fields; // Replace the object with the array directly
+      }
+      
+      
+      
       if (method === 'GET') {
-        options.params = args;
+        options.params = queryParams;
       } else {
+        // Set query parameters if they exist
+        if (Object.keys(queryParams).length > 0) {
+          options.params = queryParams;
+        }
+        
         // Check if this is a file upload endpoint
         if (tool._contentType === 'multipart/form-data' || args.file || args.data) {
-          options.body = args;
+          options.body = bodyParams;
           options.headers = { 'Content-Type': tool._contentType || 'application/json' };
-        } else {
-          options.body = args;
+        } else if (Object.keys(bodyParams).length > 0 || Array.isArray(bodyParams)) {
+          options.body = bodyParams;
         }
       }
 
@@ -117,22 +187,203 @@ export class MCPHandler {
 
   async loadOpenAPITools(specPath: string, options: OpenAPIToolsOptions = {}): Promise<number> {
     try {
-      console.error(`[MCP] Starting to load OpenAPI tools from: ${specPath}`);
       const tools = await this.openAPILoader.loadAndGenerateTools(specPath, options);
       
-      console.error(`[MCP] Generated ${tools.length} tools from OpenAPI spec`);
-      
       for (const tool of tools) {
-        console.error(`[MCP] Registering tool: ${tool.name}`);
         this.registerTool(tool.name, tool);
       }
       
-      console.error(`[MCP] Successfully loaded ${tools.length} tools from OpenAPI spec: ${specPath}`);
+      // Register OpenAPI inspection tools
+      this.registerOpenAPIInspectionTools(specPath);
+      
       return tools.length;
     } catch (error) {
       console.error(`[MCP] Failed to load OpenAPI tools from ${specPath}:`, error);
       throw error;
     }
+  }
+
+  private registerOpenAPIInspectionTools(specPath: string): void {
+    // Tool to get the raw OpenAPI specification
+    this.registerTool('get_openapi_spec', {
+      name: 'get_openapi_spec',
+      description: 'Get the complete OpenAPI specification in JSON format',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      },
+      handler: async () => {
+        const specContent = await this.openAPILoader.loadSpec(specPath);
+        return {
+          specification: specContent,
+          summary: {
+            title: specContent.info?.title,
+            version: specContent.info?.version,
+            description: specContent.info?.description,
+            totalPaths: Object.keys(specContent.paths || {}).length,
+            servers: specContent.servers?.map(s => s.url) || []
+          }
+        };
+      }
+    });
+
+    // Tool to get generated tools information
+    this.registerTool('get_generated_tools_info', {
+      name: 'get_generated_tools_info', 
+      description: 'Get information about tools generated from OpenAPI spec including parameter classifications',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      },
+      handler: async () => {
+        const toolsInfo = Array.from(this.tools.values())
+          .filter(tool => tool._apiEndpoint) // Only API-based tools
+          .map(tool => ({
+            name: tool.name,
+            description: tool.description,
+            apiEndpoint: tool._apiEndpoint,
+            method: tool._method,
+            contentType: tool._contentType,
+            pathParams: tool._pathParams || [],
+            queryParams: tool._queryParams || [],
+            bodyParams: tool._bodyParams || [],
+            inputSchema: tool.inputSchema
+          }));
+
+        return {
+          totalTools: toolsInfo.length,
+          tools: toolsInfo
+        };
+      }
+    });
+
+    // Tool to get API endpoints summary
+    this.registerTool('get_api_endpoints_summary', {
+      name: 'get_api_endpoints_summary',
+      description: 'Get a summary of all available API endpoints from OpenAPI spec',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      },
+      handler: async () => {
+        const specContent = await this.openAPILoader.loadSpec(specPath);
+        const endpoints: any[] = [];
+        
+        if (specContent.paths) {
+          for (const [path, pathItem] of Object.entries(specContent.paths)) {
+            for (const [method, operation] of Object.entries(pathItem)) {
+              if (typeof operation === 'object' && operation.operationId) {
+                endpoints.push({
+                  path,
+                  method: method.toUpperCase(),
+                  operationId: operation.operationId,
+                  summary: operation.summary,
+                  description: operation.description,
+                  parameters: operation.parameters?.map((p: any) => ({
+                    name: p.name,
+                    in: p.in,
+                    required: p.required,
+                    type: p.schema?.type
+                  })) || [],
+                  hasRequestBody: !!operation.requestBody,
+                  responses: Object.keys(operation.responses || {})
+                });
+              }
+            }
+          }
+        }
+
+        return {
+          totalEndpoints: endpoints.length,
+          endpoints: endpoints
+        };
+      }
+    });
+
+    // Tool to search/filter OpenAPI endpoints
+    this.registerTool('search_api_endpoints', {
+      name: 'search_api_endpoints',
+      description: 'Search and filter API endpoints by method, path, or operation ID',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          method: {
+            type: 'string',
+            description: 'Filter by HTTP method (GET, POST, PUT, PATCH, DELETE)',
+            enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+          },
+          pathPattern: {
+            type: 'string',
+            description: 'Filter by path pattern (supports partial matching)'
+          },
+          operationIdPattern: {
+            type: 'string',
+            description: 'Filter by operation ID pattern (supports partial matching)'
+          }
+        },
+        required: []
+      },
+      handler: async (args) => {
+        const specContent = await this.openAPILoader.loadSpec(specPath);
+        const endpoints: any[] = [];
+        
+        if (specContent.paths) {
+          for (const [path, pathItem] of Object.entries(specContent.paths)) {
+            for (const [method, operation] of Object.entries(pathItem)) {
+              if (typeof operation === 'object' && operation.operationId) {
+                const endpoint = {
+                  path,
+                  method: method.toUpperCase(),
+                  operationId: operation.operationId,
+                  summary: operation.summary,
+                  description: operation.description,
+                  parameters: operation.parameters?.map((p: any) => ({
+                    name: p.name,
+                    in: p.in,
+                    required: p.required,
+                    type: p.schema?.type
+                  })) || [],
+                  hasRequestBody: !!operation.requestBody,
+                  responses: Object.keys(operation.responses || {})
+                };
+
+                // Apply filters
+                let matches = true;
+                
+                if (args.method && endpoint.method !== args.method.toUpperCase()) {
+                  matches = false;
+                }
+                
+                if (args.pathPattern && !endpoint.path.includes(args.pathPattern)) {
+                  matches = false;
+                }
+                
+                if (args.operationIdPattern && !endpoint.operationId.includes(args.operationIdPattern)) {
+                  matches = false;
+                }
+                
+                if (matches) {
+                  endpoints.push(endpoint);
+                }
+              }
+            }
+          }
+        }
+
+        return {
+          totalEndpoints: endpoints.length,
+          filters: {
+            method: args.method || 'all',
+            pathPattern: args.pathPattern || 'none',
+            operationIdPattern: args.operationIdPattern || 'none'
+          },
+          endpoints: endpoints
+        };
+      }
+    });
   }
 
 }

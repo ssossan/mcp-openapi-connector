@@ -49,6 +49,7 @@ export class OpenAPILoader {
             path,
             method.toUpperCase(),
             operation,
+            pathItem,
             spec
           );
           
@@ -76,6 +77,7 @@ export class OpenAPILoader {
     path: string, 
     method: string, 
     operation: Operation, 
+    pathItem: any,
     spec: OpenAPISpec
   ): MCPTool {
     const tool: MCPTool = {
@@ -106,17 +108,52 @@ export class OpenAPILoader {
       required: [] as string[]
     };
 
-    // Path parameters
+    // Store parameter types for proper handling in MCP handler
+    const pathParams: string[] = [];
+    const queryParams: string[] = [];
+    const bodyParams: string[] = [];
+
+    // Path parameters - check both operation-level and path-level parameters
+    const allParameters: Parameter[] = [];
+    
+    // Add path-level parameters
+    if (pathItem.parameters) {
+      allParameters.push(...pathItem.parameters);
+    }
+    
+    // Add operation-level parameters
     if (operation.parameters) {
-      for (const param of operation.parameters) {
-        if (param.in === 'path') {
-          inputSchema.properties[param.name] = this.parameterToSchema(param);
+      allParameters.push(...operation.parameters);
+    }
+    
+    for (const param of allParameters) {
+      if (param.in === 'path') {
+        inputSchema.properties[param.name] = this.parameterToSchema(param);
+        inputSchema.required.push(param.name);
+        pathParams.push(param.name);
+      } else if (param.in === 'query') {
+        inputSchema.properties[param.name] = this.parameterToSchema(param);
+        if (param.required) {
           inputSchema.required.push(param.name);
-        } else if (param.in === 'query') {
-          inputSchema.properties[param.name] = this.parameterToSchema(param);
-          if (param.required) {
-            inputSchema.required.push(param.name);
-          }
+        }
+        queryParams.push(param.name);
+      }
+    }
+    
+    // Fallback: Extract path parameters from URL template if not explicitly defined
+    const pathTemplate = path;
+    const pathParamMatches = pathTemplate.match(/\{([^}]+)\}/g);
+    if (pathParamMatches) {
+      for (const match of pathParamMatches) {
+        const paramName = match.slice(1, -1); // Remove { and }
+        if (!pathParams.includes(paramName)) {
+          // Add missing path parameter
+          pathParams.push(paramName);
+          inputSchema.properties[paramName] = {
+            type: 'string',
+            description: `Path parameter: ${paramName}`
+          };
+          inputSchema.required.push(paramName);
         }
       }
     }
@@ -127,14 +164,34 @@ export class OpenAPILoader {
       if (jsonContent?.schema) {
         const bodySchema = this.resolveSchema(jsonContent.schema, spec);
         
-        if (bodySchema.properties) {
+        if (bodySchema.type === 'array') {
+          // Handle array request body
+          inputSchema.properties.body = {
+            type: 'array',
+            description: 'Request body as array',
+            items: bodySchema.items || {}
+          };
+          bodyParams.push('body');
+        } else if (bodySchema.properties) {
+          // Handle object request body
           Object.assign(inputSchema.properties, bodySchema.properties);
           if (bodySchema.required) {
             inputSchema.required.push(...bodySchema.required);
           }
+          bodyParams.push(...Object.keys(bodySchema.properties));
+        } else {
+          // Fallback: treat as generic body parameter
+          inputSchema.properties.body = bodySchema;
+          bodyParams.push('body');
         }
       }
     }
+
+    // Store parameter type information for MCP handler
+    tool._pathParams = pathParams;
+    tool._queryParams = queryParams;
+    tool._bodyParams = bodyParams;
+    
 
     // Always add inputSchema, even if empty (required by Claude Desktop)
     tool.inputSchema = inputSchema;
@@ -190,6 +247,19 @@ export class OpenAPILoader {
       }
       
       return merged;
+    }
+    
+    if (schema.oneOf) {
+      // For oneOf schemas, we'll use the first option as a representative
+      // This is a simplification, but works for most practical cases
+      const firstOption = schema.oneOf[0];
+      return this.resolveSchema(firstOption, spec);
+    }
+    
+    if (schema.anyOf) {
+      // Similar to oneOf, use the first option
+      const firstOption = schema.anyOf[0];
+      return this.resolveSchema(firstOption, spec);
     }
     
     return schema;

@@ -159,7 +159,9 @@ describe('MCPHandler (Real)', () => {
           required: []
         },
         _apiEndpoint: '/users/{id}',
-        _method: 'GET'
+        _method: 'GET',
+        _pathParams: ['id'],
+        _queryParams: ['include']
       };
 
       mcpHandler.registerTool('get_user', tool);

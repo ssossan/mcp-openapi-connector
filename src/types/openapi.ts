@@ -102,6 +102,9 @@ export interface MCPTool {
   _apiEndpoint?: string;
   _method?: string;
   _contentType?: string;
+  _pathParams?: string[];
+  _queryParams?: string[];
+  _bodyParams?: string[];
 }
 
 export interface OpenAPILoaderOptions {
