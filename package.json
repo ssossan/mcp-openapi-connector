@@ -1,6 +1,6 @@
 {
   "name": "@ssossan/mcp-openapi-connector",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP Server for OpenAPI-based APIs with built-in authentication management",
   "main": "dist/mcp-openapi-connector.js",
   "type": "module",
