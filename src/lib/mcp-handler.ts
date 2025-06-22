@@ -104,12 +104,13 @@ export class MCPHandler {
       
       // Fallback: If no body params detected but we have non-path args, treat as body params
       if (Object.keys(bodyParams).length === 0 && method !== 'GET') {
-        // Add common path parameter names as fallback
-        const commonPathParams = ['id', 'userId', 'memberId'];
+        // Extract path parameters from endpoint template as fallback
+        const pathParamsFromTemplate = (tool._apiEndpoint.match(/\{([^}]+)\}/g) || [])
+          .map(param => param.slice(1, -1)); // Remove { and }
         
         for (const [key, value] of Object.entries(args)) {
-          // Skip path parameters (both explicitly defined and common ones)
-          if (!pathParamNames.includes(key) && !commonPathParams.includes(key)) {
+          // Skip path parameters (both explicitly defined and extracted from template)
+          if (!pathParamNames.includes(key) && !pathParamsFromTemplate.includes(key)) {
             let processedValue = value;
             // Handle JSON strings
             if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
@@ -122,11 +123,14 @@ export class MCPHandler {
             bodyParams[key] = processedValue;
           }
         }
-        
-        // Special handling for APIs that expect 'fields' parameter as direct body array
-        if (bodyParams.fields && Array.isArray(bodyParams.fields)) {
-          bodyParams = bodyParams.fields; // Replace the object with the array directly
-        }
+      }
+      
+      // Special handling for APIs that expect direct array body (moved outside fallback)
+      if (bodyParams.body && Array.isArray(bodyParams.body)) {
+        bodyParams = bodyParams.body; // Replace the object with the array directly
+      } else if (bodyParams.fields && Array.isArray(bodyParams.fields)) {
+        // Legacy handling for 'fields' parameter as direct body array
+        bodyParams = bodyParams.fields; // Replace the object with the array directly
       }
       
       
@@ -143,7 +147,7 @@ export class MCPHandler {
         if (tool._contentType === 'multipart/form-data' || args.file || args.data) {
           options.body = bodyParams;
           options.headers = { 'Content-Type': tool._contentType || 'application/json' };
-        } else if (Object.keys(bodyParams).length > 0) {
+        } else if (Object.keys(bodyParams).length > 0 || Array.isArray(bodyParams)) {
           options.body = bodyParams;
         }
       }

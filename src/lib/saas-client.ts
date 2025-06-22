@@ -58,7 +58,18 @@ export class SaaSAPIClient {
         }
         
         const errorText = await response.text();
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+        
+        let errorDetails = errorText;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.errors || errorJson.details || errorJson.violations) {
+            errorDetails = JSON.stringify(errorJson, null, 2);
+          }
+        } catch (e) {
+          // Not JSON, use as is
+        }
+        
+        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorDetails}`);
       }
 
       const contentType = response.headers.get('content-type');

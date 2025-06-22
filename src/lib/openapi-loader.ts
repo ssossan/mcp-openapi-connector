@@ -164,12 +164,25 @@ export class OpenAPILoader {
       if (jsonContent?.schema) {
         const bodySchema = this.resolveSchema(jsonContent.schema, spec);
         
-        if (bodySchema.properties) {
+        if (bodySchema.type === 'array') {
+          // Handle array request body (like PATCH /members/v1/member/{id})
+          inputSchema.properties.body = {
+            type: 'array',
+            description: 'Request body as array',
+            items: bodySchema.items || {}
+          };
+          bodyParams.push('body');
+        } else if (bodySchema.properties) {
+          // Handle object request body
           Object.assign(inputSchema.properties, bodySchema.properties);
           if (bodySchema.required) {
             inputSchema.required.push(...bodySchema.required);
           }
           bodyParams.push(...Object.keys(bodySchema.properties));
+        } else {
+          // Fallback: treat as generic body parameter
+          inputSchema.properties.body = bodySchema;
+          bodyParams.push('body');
         }
       }
     }
@@ -234,6 +247,19 @@ export class OpenAPILoader {
       }
       
       return merged;
+    }
+    
+    if (schema.oneOf) {
+      // For oneOf schemas, we'll use the first option as a representative
+      // This is a simplification, but works for most practical cases
+      const firstOption = schema.oneOf[0];
+      return this.resolveSchema(firstOption, spec);
+    }
+    
+    if (schema.anyOf) {
+      // Similar to oneOf, use the first option
+      const firstOption = schema.anyOf[0];
+      return this.resolveSchema(firstOption, spec);
     }
     
     return schema;
