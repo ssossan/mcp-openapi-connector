@@ -165,7 +165,7 @@ export class OpenAPILoader {
         const bodySchema = this.resolveSchema(jsonContent.schema, spec);
         
         if (bodySchema.type === 'array') {
-          // Handle array request body (like PATCH /members/v1/member/{id})
+          // Handle array request body
           inputSchema.properties.body = {
             type: 'array',
             description: 'Request body as array',
