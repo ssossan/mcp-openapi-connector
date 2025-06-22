@@ -272,7 +272,7 @@ describe('MCPHandler', () => {
       );
 
       const tools = await mcpHandler.listTools();
-      expect(tools).toHaveLength(2);
+      expect(tools).toHaveLength(6); // 2 from mock + 4 OpenAPI inspection tools
     });
 
     it('should pass options to OpenAPI loader', async () => {

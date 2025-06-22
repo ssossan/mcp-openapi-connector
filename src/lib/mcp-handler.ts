@@ -188,11 +188,198 @@ export class MCPHandler {
       for (const tool of tools) {
         this.registerTool(tool.name, tool);
       }
+      
+      // Register OpenAPI inspection tools
+      this.registerOpenAPIInspectionTools(specPath);
+      
       return tools.length;
     } catch (error) {
       console.error(`[MCP] Failed to load OpenAPI tools from ${specPath}:`, error);
       throw error;
     }
+  }
+
+  private registerOpenAPIInspectionTools(specPath: string): void {
+    // Tool to get the raw OpenAPI specification
+    this.registerTool('get_openapi_spec', {
+      name: 'get_openapi_spec',
+      description: 'Get the complete OpenAPI specification in JSON format',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      },
+      handler: async () => {
+        const specContent = await this.openAPILoader.loadSpec(specPath);
+        return {
+          specification: specContent,
+          summary: {
+            title: specContent.info?.title,
+            version: specContent.info?.version,
+            description: specContent.info?.description,
+            totalPaths: Object.keys(specContent.paths || {}).length,
+            servers: specContent.servers?.map(s => s.url) || []
+          }
+        };
+      }
+    });
+
+    // Tool to get generated tools information
+    this.registerTool('get_generated_tools_info', {
+      name: 'get_generated_tools_info', 
+      description: 'Get information about tools generated from OpenAPI spec including parameter classifications',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      },
+      handler: async () => {
+        const toolsInfo = Array.from(this.tools.values())
+          .filter(tool => tool._apiEndpoint) // Only API-based tools
+          .map(tool => ({
+            name: tool.name,
+            description: tool.description,
+            apiEndpoint: tool._apiEndpoint,
+            method: tool._method,
+            contentType: tool._contentType,
+            pathParams: tool._pathParams || [],
+            queryParams: tool._queryParams || [],
+            bodyParams: tool._bodyParams || [],
+            inputSchema: tool.inputSchema
+          }));
+
+        return {
+          totalTools: toolsInfo.length,
+          tools: toolsInfo
+        };
+      }
+    });
+
+    // Tool to get API endpoints summary
+    this.registerTool('get_api_endpoints_summary', {
+      name: 'get_api_endpoints_summary',
+      description: 'Get a summary of all available API endpoints from OpenAPI spec',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      },
+      handler: async () => {
+        const specContent = await this.openAPILoader.loadSpec(specPath);
+        const endpoints: any[] = [];
+        
+        if (specContent.paths) {
+          for (const [path, pathItem] of Object.entries(specContent.paths)) {
+            for (const [method, operation] of Object.entries(pathItem)) {
+              if (typeof operation === 'object' && operation.operationId) {
+                endpoints.push({
+                  path,
+                  method: method.toUpperCase(),
+                  operationId: operation.operationId,
+                  summary: operation.summary,
+                  description: operation.description,
+                  parameters: operation.parameters?.map((p: any) => ({
+                    name: p.name,
+                    in: p.in,
+                    required: p.required,
+                    type: p.schema?.type
+                  })) || [],
+                  hasRequestBody: !!operation.requestBody,
+                  responses: Object.keys(operation.responses || {})
+                });
+              }
+            }
+          }
+        }
+
+        return {
+          totalEndpoints: endpoints.length,
+          endpoints: endpoints
+        };
+      }
+    });
+
+    // Tool to search/filter OpenAPI endpoints
+    this.registerTool('search_api_endpoints', {
+      name: 'search_api_endpoints',
+      description: 'Search and filter API endpoints by method, path, or operation ID',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          method: {
+            type: 'string',
+            description: 'Filter by HTTP method (GET, POST, PUT, PATCH, DELETE)',
+            enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+          },
+          pathPattern: {
+            type: 'string',
+            description: 'Filter by path pattern (supports partial matching)'
+          },
+          operationIdPattern: {
+            type: 'string',
+            description: 'Filter by operation ID pattern (supports partial matching)'
+          }
+        },
+        required: []
+      },
+      handler: async (args) => {
+        const specContent = await this.openAPILoader.loadSpec(specPath);
+        const endpoints: any[] = [];
+        
+        if (specContent.paths) {
+          for (const [path, pathItem] of Object.entries(specContent.paths)) {
+            for (const [method, operation] of Object.entries(pathItem)) {
+              if (typeof operation === 'object' && operation.operationId) {
+                const endpoint = {
+                  path,
+                  method: method.toUpperCase(),
+                  operationId: operation.operationId,
+                  summary: operation.summary,
+                  description: operation.description,
+                  parameters: operation.parameters?.map((p: any) => ({
+                    name: p.name,
+                    in: p.in,
+                    required: p.required,
+                    type: p.schema?.type
+                  })) || [],
+                  hasRequestBody: !!operation.requestBody,
+                  responses: Object.keys(operation.responses || {})
+                };
+
+                // Apply filters
+                let matches = true;
+                
+                if (args.method && endpoint.method !== args.method.toUpperCase()) {
+                  matches = false;
+                }
+                
+                if (args.pathPattern && !endpoint.path.includes(args.pathPattern)) {
+                  matches = false;
+                }
+                
+                if (args.operationIdPattern && !endpoint.operationId.includes(args.operationIdPattern)) {
+                  matches = false;
+                }
+                
+                if (matches) {
+                  endpoints.push(endpoint);
+                }
+              }
+            }
+          }
+        }
+
+        return {
+          totalEndpoints: endpoints.length,
+          filters: {
+            method: args.method || 'all',
+            pathPattern: args.pathPattern || 'none',
+            operationIdPattern: args.operationIdPattern || 'none'
+          },
+          endpoints: endpoints
+        };
+      }
+    });
   }
 
 }
