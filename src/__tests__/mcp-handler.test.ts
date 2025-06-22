@@ -105,7 +105,8 @@ describe('MCPHandler', () => {
         description: 'Get users',
         inputSchema: { type: 'object', properties: {}, required: [] },
         _apiEndpoint: '/users',
-        _method: 'GET'
+        _method: 'GET',
+        _queryParams: ['limit']
       };
 
       mockSaasClient.call.mockResolvedValue({ users: [] });
@@ -149,7 +150,9 @@ describe('MCPHandler', () => {
         description: 'Get user by ID',
         inputSchema: { type: 'object', properties: {}, required: [] },
         _apiEndpoint: '/users/{id}',
-        _method: 'GET'
+        _method: 'GET',
+        _pathParams: ['id'],
+        _queryParams: ['include']
       };
 
       mockSaasClient.call.mockResolvedValue({ id: '123', name: 'John' });

@@ -1,6 +1,6 @@
+import type { MCPResourceDefinition, MCPToolDefinition, OpenAPIToolsOptions } from '../types/mcp.js';
 import { OpenAPILoader } from './openapi-loader.js';
 import type { SaaSAPIClient } from './saas-client.js';
-import type { MCPToolDefinition, MCPResourceDefinition, OpenAPIToolsOptions } from '../types/mcp.js';
 
 export class MCPHandler {
   private saasClient: SaaSAPIClient;
@@ -70,15 +70,78 @@ export class MCPHandler {
       // Handle file uploads and special content types
       let options: any = { method };
       
+      // Separate parameters by type
+      const queryParams: Record<string, any> = {};
+      let bodyParams: any = {};
+      
+      
+      if (tool._queryParams) {
+        for (const param of tool._queryParams) {
+          if (args[param] !== undefined) {
+            queryParams[param] = args[param];
+          }
+        }
+      }
+      
+      if (tool._bodyParams) {
+        for (const param of tool._bodyParams) {
+          if (args[param] !== undefined) {
+            let value = args[param];
+            // Handle JSON strings (common issue with MCP parameter passing)
+            if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+              try {
+                value = JSON.parse(value);
+              } catch (e) {
+                // Silently ignore JSON parse errors
+              }
+            }
+            bodyParams[param] = value;
+          }
+        }
+      }
+      
+      // Fallback: If no body params detected but we have non-path args, treat as body params
+      if (Object.keys(bodyParams).length === 0 && method !== 'GET') {
+        const pathParamNames = tool._pathParams || [];
+        // Add common path parameter names as fallback
+        const commonPathParams = ['id', 'userId', 'memberId'];
+        
+        for (const [key, value] of Object.entries(args)) {
+          // Skip common path parameters and explicitly defined path parameters
+          if (!pathParamNames.includes(key) && !commonPathParams.includes(key)) {
+            let processedValue = value;
+            // Handle JSON strings
+            if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+              try {
+                processedValue = JSON.parse(value);
+              } catch (e) {
+                // Silently ignore JSON parse errors
+              }
+            }
+            bodyParams[key] = processedValue;
+          }
+        }
+        
+        if (bodyParams.fields && Array.isArray(bodyParams.fields)) {
+          bodyParams = bodyParams.fields; // Replace the object with the array directly
+        }
+      }
+      
+      
       if (method === 'GET') {
-        options.params = args;
+        options.params = queryParams;
       } else {
+        // Set query parameters if they exist
+        if (Object.keys(queryParams).length > 0) {
+          options.params = queryParams;
+        }
+        
         // Check if this is a file upload endpoint
         if (tool._contentType === 'multipart/form-data' || args.file || args.data) {
-          options.body = args;
+          options.body = bodyParams;
           options.headers = { 'Content-Type': tool._contentType || 'application/json' };
-        } else {
-          options.body = args;
+        } else if (Object.keys(bodyParams).length > 0) {
+          options.body = bodyParams;
         }
       }
 

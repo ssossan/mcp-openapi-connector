@@ -106,17 +106,24 @@ export class OpenAPILoader {
       required: [] as string[]
     };
 
+    // Store parameter types for proper handling in MCP handler
+    const pathParams: string[] = [];
+    const queryParams: string[] = [];
+    const bodyParams: string[] = [];
+
     // Path parameters
     if (operation.parameters) {
       for (const param of operation.parameters) {
         if (param.in === 'path') {
           inputSchema.properties[param.name] = this.parameterToSchema(param);
           inputSchema.required.push(param.name);
+          pathParams.push(param.name);
         } else if (param.in === 'query') {
           inputSchema.properties[param.name] = this.parameterToSchema(param);
           if (param.required) {
             inputSchema.required.push(param.name);
           }
+          queryParams.push(param.name);
         }
       }
     }
@@ -132,9 +139,16 @@ export class OpenAPILoader {
           if (bodySchema.required) {
             inputSchema.required.push(...bodySchema.required);
           }
+          bodyParams.push(...Object.keys(bodySchema.properties));
         }
       }
     }
+
+    // Store parameter type information for MCP handler
+    tool._pathParams = pathParams;
+    tool._queryParams = queryParams;
+    tool._bodyParams = bodyParams;
+    
 
     // Always add inputSchema, even if empty (required by Claude Desktop)
     tool.inputSchema = inputSchema;

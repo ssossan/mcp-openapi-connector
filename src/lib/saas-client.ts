@@ -13,9 +13,10 @@ export class SaaSAPIClient {
   async call(endpoint: string, options: APIRequestOptions = {}, authRetryCount: number = 0): Promise<any> {
     const { method = 'GET', params, body, headers = {} } = options;
     
+    
     let url = `${this.apiBaseUrl}${endpoint}`;
     
-    if (params && method === 'GET') {
+    if (params && Object.keys(params).length > 0) {
       const queryParams = new URLSearchParams();
       
       // Handle array parameters correctly
