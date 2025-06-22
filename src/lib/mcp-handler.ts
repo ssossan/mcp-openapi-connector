@@ -37,8 +37,6 @@ export class MCPHandler {
       return cleanTool;
     });
     
-    console.error(`[MCP] listTools() returning ${tools.length} tools:`);
-    tools.forEach(tool => console.error(`[MCP] - ${tool.name}`));
     
     return tools;
   }
@@ -59,25 +57,29 @@ export class MCPHandler {
 
     if (tool._apiEndpoint) {
       const method = tool._method || 'GET';
-      const endpoint = this.buildEndpoint(tool._apiEndpoint, args);
+      
+      // Create a copy of args to avoid modifying the original
+      const argsForEndpoint = { ...args };
+      const endpoint = this.buildEndpoint(tool._apiEndpoint, argsForEndpoint);
       
       // Special handling for authentication endpoints - call directly without bearer token
       if (endpoint === this.authPath || name.includes('auth') && name.includes('token')) {
-        console.error(`[MCP] Calling authentication endpoint directly: ${endpoint}`);
         return await this.saasClient.tokenManager.requestTokenDirect();
       }
       
       // Handle file uploads and special content types
       let options: any = { method };
       
-      // Separate parameters by type
+      // Separate parameters by type (excluding path parameters that were already consumed)
       const queryParams: Record<string, any> = {};
       let bodyParams: any = {};
+      const pathParamNames = tool._pathParams || [];
+      
       
       
       if (tool._queryParams) {
         for (const param of tool._queryParams) {
-          if (args[param] !== undefined) {
+          if (args[param] !== undefined && !pathParamNames.includes(param)) {
             queryParams[param] = args[param];
           }
         }
@@ -85,7 +87,7 @@ export class MCPHandler {
       
       if (tool._bodyParams) {
         for (const param of tool._bodyParams) {
-          if (args[param] !== undefined) {
+          if (args[param] !== undefined && !pathParamNames.includes(param)) {
             let value = args[param];
             // Handle JSON strings (common issue with MCP parameter passing)
             if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
@@ -102,12 +104,11 @@ export class MCPHandler {
       
       // Fallback: If no body params detected but we have non-path args, treat as body params
       if (Object.keys(bodyParams).length === 0 && method !== 'GET') {
-        const pathParamNames = tool._pathParams || [];
         // Add common path parameter names as fallback
         const commonPathParams = ['id', 'userId', 'memberId'];
         
         for (const [key, value] of Object.entries(args)) {
-          // Skip common path parameters and explicitly defined path parameters
+          // Skip path parameters (both explicitly defined and common ones)
           if (!pathParamNames.includes(key) && !commonPathParams.includes(key)) {
             let processedValue = value;
             // Handle JSON strings
@@ -122,10 +123,12 @@ export class MCPHandler {
           }
         }
         
+        // Special handling for APIs that expect 'fields' parameter as direct body array
         if (bodyParams.fields && Array.isArray(bodyParams.fields)) {
           bodyParams = bodyParams.fields; // Replace the object with the array directly
         }
       }
+      
       
       
       if (method === 'GET') {
@@ -180,17 +183,11 @@ export class MCPHandler {
 
   async loadOpenAPITools(specPath: string, options: OpenAPIToolsOptions = {}): Promise<number> {
     try {
-      console.error(`[MCP] Starting to load OpenAPI tools from: ${specPath}`);
       const tools = await this.openAPILoader.loadAndGenerateTools(specPath, options);
       
-      console.error(`[MCP] Generated ${tools.length} tools from OpenAPI spec`);
-      
       for (const tool of tools) {
-        console.error(`[MCP] Registering tool: ${tool.name}`);
         this.registerTool(tool.name, tool);
       }
-      
-      console.error(`[MCP] Successfully loaded ${tools.length} tools from OpenAPI spec: ${specPath}`);
       return tools.length;
     } catch (error) {
       console.error(`[MCP] Failed to load OpenAPI tools from ${specPath}:`, error);

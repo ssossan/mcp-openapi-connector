@@ -49,6 +49,7 @@ export class OpenAPILoader {
             path,
             method.toUpperCase(),
             operation,
+            pathItem,
             spec
           );
           
@@ -76,6 +77,7 @@ export class OpenAPILoader {
     path: string, 
     method: string, 
     operation: Operation, 
+    pathItem: any,
     spec: OpenAPISpec
   ): MCPTool {
     const tool: MCPTool = {
@@ -111,19 +113,47 @@ export class OpenAPILoader {
     const queryParams: string[] = [];
     const bodyParams: string[] = [];
 
-    // Path parameters
+    // Path parameters - check both operation-level and path-level parameters
+    const allParameters: Parameter[] = [];
+    
+    // Add path-level parameters
+    if (pathItem.parameters) {
+      allParameters.push(...pathItem.parameters);
+    }
+    
+    // Add operation-level parameters
     if (operation.parameters) {
-      for (const param of operation.parameters) {
-        if (param.in === 'path') {
-          inputSchema.properties[param.name] = this.parameterToSchema(param);
+      allParameters.push(...operation.parameters);
+    }
+    
+    for (const param of allParameters) {
+      if (param.in === 'path') {
+        inputSchema.properties[param.name] = this.parameterToSchema(param);
+        inputSchema.required.push(param.name);
+        pathParams.push(param.name);
+      } else if (param.in === 'query') {
+        inputSchema.properties[param.name] = this.parameterToSchema(param);
+        if (param.required) {
           inputSchema.required.push(param.name);
-          pathParams.push(param.name);
-        } else if (param.in === 'query') {
-          inputSchema.properties[param.name] = this.parameterToSchema(param);
-          if (param.required) {
-            inputSchema.required.push(param.name);
-          }
-          queryParams.push(param.name);
+        }
+        queryParams.push(param.name);
+      }
+    }
+    
+    // Fallback: Extract path parameters from URL template if not explicitly defined
+    const pathTemplate = path;
+    const pathParamMatches = pathTemplate.match(/\{([^}]+)\}/g);
+    if (pathParamMatches) {
+      for (const match of pathParamMatches) {
+        const paramName = match.slice(1, -1); // Remove { and }
+        if (!pathParams.includes(paramName)) {
+          // Add missing path parameter
+          pathParams.push(paramName);
+          inputSchema.properties[paramName] = {
+            type: 'string',
+            description: `Path parameter: ${paramName}`
+          };
+          inputSchema.required.push(paramName);
         }
       }
     }
